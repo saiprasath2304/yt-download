@@ -24,6 +24,17 @@ logger = logging.getLogger(__name__)
 # Store download progress and cleanup old entries
 download_progress = {}
 
+def get_random_user_agent():
+    """Get a random user agent to avoid detection"""
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
+    ]
+    return random.choice(user_agents)
+
 def cleanup_old_downloads():
     """Clean up old download entries and temp files"""
     current_time = time.time()
@@ -77,7 +88,8 @@ def is_valid_youtube_url(url):
         r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})',
         r'(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})',
         r'(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]{11})',
-        r'(?:https?://)?(?:www\.)?youtube\.com/v/([a-zA-Z0-9_-]{11})'
+        r'(?:https?://)?(?:www\.)?youtube\.com/v/([a-zA-Z0-9_-]{11})',
+        r'(?:https?://)?(?:www\.)?youtube\.com/shorts/([a-zA-Z0-9_-]{11})'
     ]
     
     for pattern in youtube_patterns:
@@ -93,8 +105,35 @@ def get_video_info(url):
         'extract_flat': False,
         'skip_download': True,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
+            'User-Agent': get_random_user_agent(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
+        },
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+                'skip': ['dash'],
+                'player_skip': ['webpage', 'configs'],
+                'player_params': {'hl': 'en', 'gl': 'US'}
+            }
+        },
+        'sleep_interval': 2,
+        'max_sleep_interval': 5,
+        'retries': 5,
+        'fragment_retries': 5,
+        'ignoreerrors': False,
+        'no_warnings': True,
+        'cookiesfrombrowser': None,  # Will try to use browser cookies if available
+        'cookiefile': None
     }
     
     try:
@@ -147,7 +186,7 @@ def download_thumbnail(thumbnail_url, video_id, temp_dir):
     """Download and save thumbnail"""
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': get_random_user_agent()
         }
         response = requests.get(thumbnail_url, headers=headers, timeout=10)
         response.raise_for_status()
@@ -186,29 +225,40 @@ def download_video(url, quality='best', download_id=None, download_thumbnail_opt
         'format': quality_formats.get(quality, 'best'),
         'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Accept-Encoding': 'gzip,deflate',
+            'User-Agent': get_random_user_agent(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
             'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
         },
-        'sleep_interval': 1,
+        'sleep_interval': 2,
         'max_sleep_interval': 5,
-        'retries': 3,
-        'fragment_retries': 3,
+        'retries': 5,
+        'fragment_retries': 5,
         'ignoreerrors': False,
         'no_warnings': True,
         'progress_hooks': [ProgressHook(download_id)],
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'web'],
-                'skip': ['dash']  # Skip DASH to avoid issues
+                'skip': ['dash'],
+                'player_skip': ['webpage', 'configs'],
+                'player_params': {'hl': 'en', 'gl': 'US'}
             }
         },
         'writesubtitles': False,
         'writeautomaticsub': False,
         'writethumbnail': download_thumbnail_option,
         'merge_output_format': 'mp4',
+        'cookiesfrombrowser': None,  # Will try to use browser cookies if available
+        'cookiefile': None,
         'postprocessors': [{
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4',
@@ -281,15 +331,28 @@ def get_video_info_api():
         if not is_valid_youtube_url(url):
             return jsonify({'error': 'Invalid YouTube URL. Please enter a valid YouTube video URL.'}), 400
         
-        info = get_video_info(url)
-        if not info:
-            return jsonify({'error': 'Could not extract video information. The video might be private, deleted, or restricted.'}), 400
+        video_info = get_video_info(url)
         
-        return jsonify(info)
-    
+        if not video_info:
+            return jsonify({'error': 'Could not fetch video information. The video might be private, restricted, or YouTube is blocking requests. Please try again later.'}), 400
+        
+        return jsonify(video_info)
+        
     except Exception as e:
-        logger.error(f"Video info API error: {e}")
-        return jsonify({'error': 'An error occurred while fetching video information.'}), 500
+        error_msg = str(e)
+        if "Sign in to confirm you're not a bot" in error_msg:
+            error_msg = "YouTube is blocking requests. Please try again later or try a different video."
+        elif "Video unavailable" in error_msg:
+            error_msg = "This video is not available for download (private, restricted, or removed)."
+        elif "Video is private" in error_msg:
+            error_msg = "This video is private and cannot be downloaded."
+        elif "This video is not available" in error_msg:
+            error_msg = "This video is not available in your region or has been removed."
+        else:
+            error_msg = f"Error fetching video info: {error_msg}"
+        
+        logger.error(f"Error in get_video_info_api: {error_msg}")
+        return jsonify({'error': error_msg}), 400
 
 @app.route('/api/download', methods=['POST'])
 def download_video_api():
