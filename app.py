@@ -99,88 +99,124 @@ def is_valid_youtube_url(url):
 
 def get_video_info(url):
     """Extract video information without downloading"""
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': False,
-        'skip_download': True,
-        'http_headers': {
-            'User-Agent': get_random_user_agent(),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
-        },
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web'],
-                'skip': ['dash'],
-                'player_skip': ['webpage', 'configs'],
-                'player_params': {'hl': 'en', 'gl': 'US'}
+    # Try different extraction methods
+    extraction_methods = [
+        {
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web', 'mweb', 'tv_embedded'],
+                    'skip': ['dash'],
+                    'player_skip': ['webpage', 'configs'],
+                    'player_params': {'hl': 'en', 'gl': 'US'},
+                    'player_include': ['player_response', 'player_js'],
+                    'extract_flat': False,
+                    'extract_info': True
+                }
             }
         },
-        'sleep_interval': 2,
-        'max_sleep_interval': 5,
-        'retries': 5,
-        'fragment_retries': 5,
-        'ignoreerrors': False,
-        'no_warnings': True,
-        'cookiesfrombrowser': None,  # Will try to use browser cookies if available
-        'cookiefile': None
-    }
+        {
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web'],
+                    'skip': ['dash'],
+                    'player_skip': ['webpage'],
+                    'player_params': {'hl': 'en', 'gl': 'US'}
+                }
+            }
+        },
+        {
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android'],
+                    'skip': ['dash'],
+                    'player_params': {'hl': 'en', 'gl': 'US'}
+                }
+            }
+        }
+    ]
     
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            
-            # Get available formats for quality options
-            formats = info.get('formats', [])
-            available_qualities = []
-            
-            # Extract unique quality options
-            quality_map = {}
-            for fmt in formats:
-                if fmt.get('height') and fmt.get('ext') in ['mp4', 'webm']:
-                    height = fmt['height']
-                    if height not in quality_map:
-                        quality_map[height] = {
-                            'height': height,
-                            'ext': fmt['ext'],
-                            'filesize': fmt.get('filesize', 0),
-                            'format_id': fmt['format_id']
-                        }
-                    # Keep the best format for each height
-                    elif fmt.get('filesize', 0) > quality_map[height]['filesize']:
-                        quality_map[height] = {
-                            'height': height,
-                            'ext': fmt['ext'],
-                            'filesize': fmt.get('filesize', 0),
-                            'format_id': fmt['format_id']
-                        }
-            
-            available_qualities = sorted(quality_map.values(), key=lambda x: x['height'], reverse=True)
-            
-            return {
-                'title': info.get('title', 'Unknown'),
-                'duration': info.get('duration', 0),
-                'uploader': info.get('uploader', 'Unknown'),
-                'view_count': info.get('view_count', 0),
-                'thumbnail': info.get('thumbnail', ''),
-                'description': info.get('description', '')[:200] + '...' if info.get('description') else '',
-                'upload_date': info.get('upload_date', ''),
-                'available_qualities': available_qualities,
-                'video_id': info.get('id', '')
+    for i, method in enumerate(extraction_methods):
+        try:
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'skip_download': True,
+                'http_headers': {
+                    'User-Agent': get_random_user_agent(),
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0'
+                },
+                'sleep_interval': 2,
+                'max_sleep_interval': 5,
+                'retries': 3,
+                'fragment_retries': 3,
+                'ignoreerrors': False,
+                'no_warnings': True,
+                'cookiesfrombrowser': None,
+                'cookiefile': None
             }
-    except Exception as e:
-        logger.error(f"Error extracting video info: {e}")
-        return None
+            ydl_opts.update(method)
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
+                # Get available formats for quality options
+                formats = info.get('formats', [])
+                available_qualities = []
+                
+                # Extract unique quality options
+                quality_map = {}
+                for fmt in formats:
+                    if fmt.get('height') and fmt.get('ext') in ['mp4', 'webm']:
+                        height = fmt['height']
+                        if height not in quality_map:
+                            quality_map[height] = {
+                                'height': height,
+                                'ext': fmt['ext'],
+                                'filesize': fmt.get('filesize', 0),
+                                'format_id': fmt['format_id']
+                            }
+                        # Keep the best format for each height
+                        elif fmt.get('filesize', 0) > quality_map[height]['filesize']:
+                            quality_map[height] = {
+                                'height': height,
+                                'ext': fmt['ext'],
+                                'filesize': fmt.get('filesize', 0),
+                                'format_id': fmt['format_id']
+                            }
+                
+                available_qualities = sorted(quality_map.values(), key=lambda x: x['height'], reverse=True)
+                
+                return {
+                    'title': info.get('title', 'Unknown'),
+                    'duration': info.get('duration', 0),
+                    'uploader': info.get('uploader', 'Unknown'),
+                    'view_count': info.get('view_count', 0),
+                    'thumbnail': info.get('thumbnail', ''),
+                    'description': info.get('description', '')[:200] + '...' if info.get('description') else '',
+                    'upload_date': info.get('upload_date', ''),
+                    'available_qualities': available_qualities,
+                    'video_id': info.get('id', '')
+                }
+                
+        except Exception as e:
+            logger.warning(f"Extraction method {i+1} failed: {str(e)}")
+            if i == len(extraction_methods) - 1:  # Last method
+                logger.error(f"All extraction methods failed for URL: {url}")
+                return None
+            continue
+    
+    return None
 
 def download_thumbnail(thumbnail_url, video_id, temp_dir):
     """Download and save thumbnail"""
@@ -221,96 +257,137 @@ def download_video(url, quality='best', download_id=None, download_thumbnail_opt
         'audio_only': 'bestaudio[ext=m4a]/bestaudio'
     }
     
-    ydl_opts = {
-        'format': quality_formats.get(quality, 'best'),
-        'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-        'http_headers': {
-            'User-Agent': get_random_user_agent(),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
-        },
-        'sleep_interval': 2,
-        'max_sleep_interval': 5,
-        'retries': 5,
-        'fragment_retries': 5,
-        'ignoreerrors': False,
-        'no_warnings': True,
-        'progress_hooks': [ProgressHook(download_id)],
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web'],
-                'skip': ['dash'],
-                'player_skip': ['webpage', 'configs'],
-                'player_params': {'hl': 'en', 'gl': 'US'}
+    # Try different extraction methods
+    extraction_methods = [
+        {
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web', 'mweb', 'tv_embedded'],
+                    'skip': ['dash'],
+                    'player_skip': ['webpage', 'configs'],
+                    'player_params': {'hl': 'en', 'gl': 'US'},
+                    'player_include': ['player_response', 'player_js'],
+                    'extract_flat': False,
+                    'extract_info': True
+                }
             }
         },
-        'writesubtitles': False,
-        'writeautomaticsub': False,
-        'writethumbnail': download_thumbnail_option,
-        'merge_output_format': 'mp4',
-        'cookiesfrombrowser': None,  # Will try to use browser cookies if available
-        'cookiefile': None,
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }] if quality != 'audio_only' else []
-    }
+        {
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web'],
+                    'skip': ['dash'],
+                    'player_skip': ['webpage'],
+                    'player_params': {'hl': 'en', 'gl': 'US'}
+                }
+            }
+        },
+        {
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android'],
+                    'skip': ['dash'],
+                    'player_params': {'hl': 'en', 'gl': 'US'}
+                }
+            }
+        }
+    ]
     
-    try:
-        # First get video info to extract thumbnail if requested
-        video_info = get_video_info(url)
-        thumbnail_path = None
-        
-        if download_thumbnail_option and video_info and video_info.get('thumbnail'):
-            thumbnail_path = download_thumbnail(
-                video_info['thumbnail'], 
-                video_info.get('video_id', download_id), 
-                temp_dir
-            )
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            download_progress[download_id] = {'status': 'starting', 'percent': '0%'}
-            ydl.download([url])
+    for i, method in enumerate(extraction_methods):
+        try:
+            ydl_opts = {
+                'format': quality_formats.get(quality, 'best'),
+                'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+                'http_headers': {
+                    'User-Agent': get_random_user_agent(),
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0'
+                },
+                'sleep_interval': 2,
+                'max_sleep_interval': 5,
+                'retries': 3,
+                'fragment_retries': 3,
+                'ignoreerrors': False,
+                'no_warnings': True,
+                'progress_hooks': [ProgressHook(download_id)],
+                'writesubtitles': False,
+                'writeautomaticsub': False,
+                'writethumbnail': download_thumbnail_option,
+                'merge_output_format': 'mp4',
+                'cookiesfrombrowser': None,
+                'cookiefile': None,
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }] if quality != 'audio_only' else []
+            }
+            ydl_opts.update(method)
             
-            # Find the downloaded file
-            files = [f for f in os.listdir(temp_dir) if not f.startswith('.')]
-            if files:
-                file_path = os.path.join(temp_dir, files[0])
-                # Update progress with file path and thumbnail path
-                if download_id in download_progress:
-                    download_progress[download_id]['file_path'] = file_path
-                    if thumbnail_path:
-                        download_progress[download_id]['thumbnail_path'] = thumbnail_path
-                return file_path
-            else:
-                raise Exception("No file was downloaded")
+            # First get video info to extract thumbnail if requested
+            video_info = get_video_info(url)
+            thumbnail_path = None
+            
+            if download_thumbnail_option and video_info and video_info.get('thumbnail'):
+                thumbnail_path = download_thumbnail(
+                    video_info['thumbnail'], 
+                    video_info.get('video_id', download_id), 
+                    temp_dir
+                )
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                download_progress[download_id] = {'status': 'starting', 'percent': '0%'}
+                ydl.download([url])
                 
-    except yt_dlp.utils.DownloadError as e:
-        error_msg = str(e)
-        if "Sign in to confirm you're not a bot" in error_msg:
-            error_msg = "YouTube is blocking requests. Please try again later."
-        elif "Video unavailable" in error_msg:
-            error_msg = "This video is not available for download."
-        
-        download_progress[download_id] = {'status': 'error', 'message': error_msg}
-        # Clean up temp directory on error
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        raise Exception(error_msg)
-    except Exception as e:
-        error_msg = f"Download failed: {str(e)}"
-        download_progress[download_id] = {'status': 'error', 'message': error_msg}
-        # Clean up temp directory on error
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        raise Exception(error_msg)
+                # Find the downloaded file
+                files = [f for f in os.listdir(temp_dir) if not f.startswith('.')]
+                if files:
+                    file_path = os.path.join(temp_dir, files[0])
+                    # Update progress with file path and thumbnail path
+                    if download_id in download_progress:
+                        download_progress[download_id]['file_path'] = file_path
+                        if thumbnail_path:
+                            download_progress[download_id]['thumbnail_path'] = thumbnail_path
+                    return file_path
+                else:
+                    raise Exception("No file was downloaded")
+                    
+        except yt_dlp.utils.DownloadError as e:
+            error_msg = str(e)
+            if "Sign in to confirm you're not a bot" in error_msg:
+                error_msg = "YouTube is blocking requests. Please try again later."
+            elif "Video unavailable" in error_msg:
+                error_msg = "This video is not available for download."
+            elif "Failed to extract any player response" in error_msg:
+                logger.warning(f"Player response extraction failed with method {i+1}: {error_msg}")
+                if i == len(extraction_methods) - 1:  # Last method
+                    error_msg = "Unable to extract video information. YouTube may have changed their API."
+                    download_progress[download_id] = {'status': 'error', 'message': error_msg}
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    raise Exception(error_msg)
+                continue  # Try next method
+            else:
+                download_progress[download_id] = {'status': 'error', 'message': error_msg}
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                raise Exception(error_msg)
+        except Exception as e:
+            logger.warning(f"Download method {i+1} failed: {str(e)}")
+            if i == len(extraction_methods) - 1:  # Last method
+                error_msg = f"Download failed: {str(e)}"
+                download_progress[download_id] = {'status': 'error', 'message': error_msg}
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                raise Exception(error_msg)
+            continue  # Try next method
+    
+    return None
 
 @app.route('/')
 def index():
@@ -348,6 +425,8 @@ def get_video_info_api():
             error_msg = "This video is private and cannot be downloaded."
         elif "This video is not available" in error_msg:
             error_msg = "This video is not available in your region or has been removed."
+        elif "Failed to extract any player response" in error_msg:
+            error_msg = "Unable to extract video information. YouTube may have changed their API. Please try again later."
         else:
             error_msg = f"Error fetching video info: {error_msg}"
         
